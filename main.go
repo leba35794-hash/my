@@ -28,16 +28,16 @@ func main() {
     r.Use(rateLimitMiddleware())  // 再限流
     
     // 公开页面
-    r.StaticFile("/", "./static/a.html")
-    r.StaticFile("/register.html", "./static/register.html")
+    r.StaticFile("/", "./a.html")
+    r.StaticFile("/register.html", "./register.html")
     
     // 保护页面
     protected := r.Group("/")
     protected.Use(authMiddleware())
     {
-        protected.StaticFile("/admin.html", "./static/admin.html")
-        protected.StaticFile("/downward.html", "./static/downward.html")
-        protected.StaticFile("/base.apk", "./static/base.apk")
+        protected.StaticFile("/admin.html", "./admin.html")
+        protected.StaticFile("/downward.html", "./downward.html")
+        protected.StaticFile("/base.apk", "./base.apk")
     }
     
     // 禁止访问
@@ -394,7 +394,7 @@ func verifyPassword(password, encodedHash string) bool {
 
 func initDB() {
     var err error
-    db, err = sql.Open("sqlite3", "./data/users.db")
+    db, err = sql.Open("sqlite3", "./users.db")
     if err != nil {
         fmt.Println("打开数据库失败:", err)
         return
@@ -415,7 +415,7 @@ func initDB() {
 
 func writeLog(action string, username string, ip string) {
     os.MkdirAll("./logs", 0755)
-    file, err := os.OpenFile("./logs/server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    file, err := os.OpenFile("./server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
     if err == nil {
         defer file.Close()
         timestamp := time.Now().Format("2006-01-02 15:04:05")
