@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>登录</title>
+    <style>
+        body { font-family: sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+        .login-box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; }
+        input, button { padding: 10px; margin: 8px 0; width: 100%; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h3>用户登录</h3>
+        <input placeholder="账号" id="username"><br>
+        <input placeholder="密码" id="password" type="password"><br>
+        <button onclick="login()">登录</button>
+        <button onclick="location.href='/register.html'" style="background:#28a745">注册账号</button>
+    </div>
+
+    <script>
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+            const res = await fetch('/api/login', {method: 'POST', body: formData});
+            const data = await res.json();
+            if (data.code === 0) {
+                // 保存用户名到 sessionStorage
+                sessionStorage.setItem('username', username);
+                window.location.href = data.redirect;
+            } else {
+                alert(data.message);
+            }
+        }
+    </script>
+</body>
+</html>

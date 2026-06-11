@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>下载中心</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .card { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .comment { border-bottom: 1px solid #eee; padding: 10px 0; margin-left: 20px; }
+        .comment-root { margin-left: 0; }
+        .comment-user { font-weight: bold; color: #007bff; }
+        .comment-time { font-size: 12px; color: #999; margin-left: 10px; }
+        .reply-btn, .like-btn { font-size: 12px; color: #666; cursor: pointer; margin-left: 10px; }
+        .like-btn.liked { color: red; }
+        textarea { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+        .logout { background: #dc3545; }
+        .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <h2>下载中心</h2>
+        <div>
+            <span>欢迎, <span id="username"></span>！</span>
+            <button class="logout" onclick="logout()">退出登录</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>APK 下载</h3>
+        <button onclick="location.href='/base.apk'">下载安装包</button>
+    </div>
+
+    <div class="card">
+        <h3>发表评论</h3>
+        <textarea id="comment_content" rows="3" placeholder="说点什么..."></textarea><br><br>
+        <button onclick="postComment(0)">提交评论</button>
+        <p style="color:#999; font-size:12px;">* 管理员审核后才会显示，点击"回复"可回复他人</p>
+    </div>
+
+    <div class="card">
+        <h3>最新评论</h3>
+        <div id="comments-list">加载中...</div>
+    </div>
+
+    <script>
+        const username = sessionStorage.getItem('username');
+        const token = sessionStorage.getItem('token');
+        
+        if (!username || !token) {
+            window.location.href = '/';
+        }
+        document.getElementById('username').innerText = username;
+
+        async function logout() {
+            sessionStorage.removeItem('username');
+            sessionStorage.removeItem('token');
+            window.location.href = '/';
+        }
+
+        async function postComment(parentId) {
+            const content = document.getElementById('comment_content').value;
+            if (!content) {
+                alert("请输入评论内容");
+                return;
+            }
+            
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('token', token);
+            formData.append('content', content);
+            if (parentId > 0) {
+                formData.append('parent_id', parentId);
+            }
+            
+            try {
+                const res = await fetch('/api/comments', {method: 'POST', body: formData});
+                const data = await res.json();
+                alert(data.message);
+                if (data.code === 0) {
+                    document.getElementById('comment_content').value = '';
+                    loadComments();
+                }
+            } catch (err) {
+                alert("发表失败：" + err);
+            }
+        }
+
+        async function replyTo(commentId, replyUsername) {
+            document.getElementById('comment_content').value = '@' + replyUsername + ' ';
+            document.getElementById('comment_content').focus();
+            window.currentReplyId = commentId;
+        }
+
+        async function likeComment(commentId, btn) {
+            const formData = new URLSearchParams();
+            formData.append('comment_id', commentId);
+            formData.append('username', username);
+            formData.append('token', token);
+            
+            const res = await fetch('/api/like', {method: 'POST', body: formData});
+            const data = await res.json();
+            if (data.code === 0) {
+                if (data.action === 'liked') {
+                    btn.classList.add('liked');
+                    btn.innerText = '❤️ 点赞';
+                } else {
+                    btn.classList.remove('liked');
+                    btn.innerText = '🤍 点赞';
+                }
+                loadComments(); // 刷新点赞数
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const res = await fetch('/api/comments');
+                const data = await res.json();
+                const container = document.getElementById('comments-list');
+                if (data.code === 0 && data.data && data.data.length > 0) {
+                    container.innerHTML = renderComments(data.data);
+                } else {
+                    container.innerHTML = '暂无评论';
+                }
+            } catch (err) {
+                document.getElementById('comments-list').innerHTML = '加载失败';
+            }
+        }
+
+        function renderComments(comments, level = 0) {
+            if (!comments || comments.length === 0) return '';
+            return comments.map(c => `
+                <div class="comment comment-root" style="margin-left: ${level * 20}px">
+                    <span class="comment-user">${escapeHtml(c.username)}</span>
+                    <span class="comment-time">${c.created_at}</span>
+                    <span class="reply-btn" onclick="replyTo(${c.id}, '${c.username}')">💬 回复</span>
+                    <span class="like-btn ${c.user_liked ? 'liked' : ''}" onclick="likeComment(${c.id}, this)">${c.like_count > 0 ? '❤️' : '🤍'} ${c.like_count || 0}</span>
+                    <p>${escapeHtml(c.content)}</p>
+                    ${c.replies && c.replies.length > 0 ? renderComments(c.replies, level + 1) : ''}
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        loadComments();
+        setInterval(loadComments, 5000);
+    </script>
+</body>
+</html>

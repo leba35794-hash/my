@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>注册</title>
+    <style>
+        body { font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 20px; }
+        input, button { padding: 8px; margin: 5px; width: 90%; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h3>注册</h3>
+    <input placeholder="账号" id="username"><br>
+    <input placeholder="密码" id="password" type="password"><br>
+    <button onclick="register()">注册</button>
+    <button onclick="location.href='/'">返回登录</button>
+
+    <script>
+        async function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            if (!username || !password) {
+                alert("账号和密码不能为空");
+                return;
+            }
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+            const res = await fetch('/api/register', {method: 'POST', body: formData});
+            const data = await res.json();
+            alert(data.message);
+            if (data.code === 0) {
+                window.location.href = '/';
+            }
+        }
+    </script>
+</body>
+</html>

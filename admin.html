@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>管理后台</title>
+    <style>
+        body { font-family: sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav button { padding: 10px 16px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        .nav button:hover { background: #0056b3; }
+        .logout { background: #dc3545 !important; }
+        .section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .pending-item, .user-item, .comment-item { border-bottom: 1px solid #eee; padding: 12px; }
+        .btn-approve { background: #28a745; color: white; padding: 5px 12px; margin: 5px; border: none; cursor: pointer; border-radius: 3px; }
+        .btn-delete { background: #dc3545; color: white; padding: 5px 12px; margin: 5px; border: none; cursor: pointer; border-radius: 3px; }
+        .badge { background: #ffc107; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        .badge-admin { background: #007bff; color: white; }
+        .reply-badge { background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 8px; }
+        .comment-time { font-size: 12px; color: #999; margin-left: 10px; }
+        .like-count { font-size: 12px; color: #e83e8c; margin-left: 10px; }
+        hr { margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span style="flex:1"><strong>管理后台</strong> - 欢迎, <span id="username"></span></span>
+        <button onclick="showDashboard()">📊 概览</button>
+        <button onclick="showPending()">⏳ 待审核评论</button>
+        <button onclick="showComments()">📝 所有评论</button>
+        <button onclick="showUsers()">👥 用户列表</button>
+        <button onclick="showBannedIPs()">🔒 封禁IP列表</button>
+        <button class="logout" onclick="logout()">退出登录</button>
+    </div>
+    <div id="content">加载中...</div>
+
+    <script>
+        const username = sessionStorage.getItem('username');
+        const token = sessionStorage.getItem('token');
+        
+        if (!username || !token) {
+            window.location.href = '/';
+        }
+        document.getElementById('username').innerText = username;
+
+        async function logout() {
+            sessionStorage.removeItem('username');
+            sessionStorage.removeItem('token');
+            window.location.href = '/';
+        }
+
+        async function showDashboard() {
+            document.getElementById('content').innerHTML = '<div class="section">加载统计...</div>';
+            try {
+                const [pendingRes, usersRes, commentsRes, bannedRes] = await Promise.all([
+                    fetch('/api/admin/pending', {headers: {'X-Username': username, 'X-Token': token}}),
+                    fetch('/api/admin/users', {headers: {'X-Username': username, 'X-Token': token}}),
+                    fetch('/api/comments'),
+                    fetch('/api/admin/banned_ips', {headers: {'X-Username': username, 'X-Token': token}})
+                ]);
+                const pending = await pendingRes.json();
+                const users = await usersRes.json();
+                const comments = await commentsRes.json();
+                const banned = await bannedRes.json();
+                
+                document.getElementById('content').innerHTML = `
+                    <div class="section">
+                        <h3>📊 系统概览</h3>
+                        <p>👥 用户总数: ${users.data ? users.data.length : 0}</p>
+                        <p>💬 评论总数: ${comments.data ? comments.data.length : 0}</p>
+                        <p>⏳ 待审核评论: ${pending.data ? pending.data.length : 0}</p>
+                        <p>🔒 被封禁IP: ${banned.data ? banned.data.length : 0}</p>
+                        <hr>
+                        <p>🔐 管理员账号: root</p>
+                        <p>🌐 公网地址: ${window.location.origin}</p>
+                    </div>
+                `;
+            } catch(e) {
+                document.getElementById('content').innerHTML = '<div class="section">加载失败</div>';
+            }
+        }
+
+        async function showPending() {
+            const res = await fetch('/api/admin/pending', {headers: {'X-Username': username, 'X-Token': token}});
+            const data = await res.json();
+            if (data.code === 0 && data.data && data.data.length > 0) {
+                document.getElementById('content').innerHTML = `
+                    <div class="section"><h3>⏳ 待审核评论</h3>
+                    ${data.data.map(c => `
+                        <div class="pending-item">
+                            <strong>${escapeHtml(c.username)}</strong>
+                            ${c.parent_id && c.parent_id > 0 ? '<span class="reply-badge">回复</span>' : '<span class="reply-badge">评论</span>'}
+                            <span class="comment-time">${c.created_at}</span>
+                            <p style="margin-top:8px;">${escapeHtml(c.content)}</p>
+                            <button class="btn-approve" onclick="approve(${c.id}, 'approve')">✓ 通过</button>
+                            <button class="btn-delete" onclick="approve(${c.id}, 'delete')">✗ 删除</button>
+                        </div>
+                    `).join('')}</div>`;
+            } else {
+                document.getElementById('content').innerHTML = '<div class="section">✅ 暂无待审核评论</div>';
+            }
+        }
+
+        async function showComments() {
+            const res = await fetch('/api/comments');
+            const data = await res.json();
+            if (data.code === 0 && data.data && data.data.length > 0) {
+                document.getElementById('content').innerHTML = `
+                    <div class="section"><h3>📝 所有评论</h3>
+                    ${renderCommentTree(data.data)}
+                    </div>`;
+            } else {
+                document.getElementById('content').innerHTML = '<div class="section">暂无评论</div>';
+            }
+        }
+
+        function renderCommentTree(comments, level = 0) {
+            if (!comments || comments.length === 0) return '';
+            return comments.map(c => `
+                <div class="comment-item" style="margin-left: ${level * 20}px">
+                    <strong>${escapeHtml(c.username)}</strong>
+                    ${level > 0 ? '<span class="reply-badge">回复</span>' : ''}
+                    <span class="comment-time">${c.created_at}</span>
+                    <span class="like-count">❤️ ${c.like_count || 0}</span>
+                    <p style="margin-top:8px;">${escapeHtml(c.content)}</p>
+                    <button class="btn-delete" onclick="deleteComment(${c.id})">删除</button>
+                    ${c.replies && c.replies.length > 0 ? renderCommentTree(c.replies, level + 1) : ''}
+                </div>
+            `).join('');
+        }
+
+        async function approve(id, action) {
+            const formData = new URLSearchParams();
+            formData.append('id', id);
+            formData.append('action', action);
+            const res = await fetch('/api/admin/approve', {
+                method: 'POST',
+                headers: {'X-Username': username, 'X-Token': token},
+                body: formData
+            });
+            const data = await res.json();
+            alert(data.message);
+            showPending();
+        }
+
+        async function deleteComment(id) {
+            if (!confirm('确定要删除这条评论吗？')) return;
+            const formData = new URLSearchParams();
+            formData.append('id', id);
+            formData.append('action', 'delete');
+            const res = await fetch('/api/admin/approve', {
+                method: 'POST',
+                headers: {'X-Username': username, 'X-Token': token},
+                body: formData
+            });
+            const data = await res.json();
+            alert(data.message);
+            showComments();
+        }
+
+        async function showUsers() {
+            const res = await fetch('/api/admin/users', {headers: {'X-Username': username, 'X-Token': token}});
+            const data = await res.json();
+            if (data.code === 0 && data.data) {
+                document.getElementById('content').innerHTML = `
+                    <div class="section"><h3>👥 用户列表</h3>
+                    ${data.data.map(u => `
+                        <div class="user-item">
+                            <strong>${escapeHtml(u.username)}</strong> - 
+                            ${u.role === 'admin' ? '<span class="badge badge-admin">管理员</span>' : '<span class="badge">普通用户</span>'}
+                            <span class="comment-time">注册: ${u.created_at}</span>
+                        </div>
+                    `).join('')}</div>`;
+            } else {
+                document.getElementById('content').innerHTML = '<div class="section">暂无用户</div>';
+            }
+        }
+
+        async function showBannedIPs() {
+            const res = await fetch('/api/admin/banned_ips', {
+                headers: {'X-Username': username, 'X-Token': token}
+            });
+            const data = await res.json();
+            if (data.code === 0 && data.data && data.data.length > 0) {
+                document.getElementById('content').innerHTML = `
+                    <div class="section"><h3>🔒 被封禁的IP</h3>
+                    ${data.data.map(ip => `
+                        <div class="user-item">
+                            <strong>${escapeHtml(ip.ip)}</strong> - 
+                            封禁至: ${ip.ban_until}<br>
+                            原因: ${ip.reason}<br>
+                            <button class="btn-approve" onclick="unbanIP('${ip.ip}')">解封</button>
+                        </div>
+                    `).join('')}</div>`;
+            } else {
+                document.getElementById('content').innerHTML = '<div class="section">暂无被封禁的IP</div>';
+            }
+        }
+
+        async function unbanIP(ip) {
+            if (!confirm(`确定要解封 ${ip} 吗？`)) return;
+            const formData = new URLSearchParams();
+            formData.append('ip', ip);
+            const res = await fetch('/api/admin/unban', {
+                method: 'POST',
+                headers: {'X-Username': username, 'X-Token': token},
+                body: formData
+            });
+            const data = await res.json();
+            alert(data.message);
+            showBannedIPs();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        showDashboard();
+    </script>
+</body>
+</html>
