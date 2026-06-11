@@ -50,7 +50,7 @@ func banIP(ip string, duration time.Duration, reason string) {
 
 func writeDetailLog(action string, ip string, detail string, extra string) {
     os.MkdirAll("./logs", 0755)
-    file, err := os.OpenFile("./logs/detail.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    file, err := os.OpenFile("./detail.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
     if err != nil {
         return
     }
