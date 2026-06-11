@@ -1,0 +1,16 @@
+# 数据库文件
+*.db
+*.db-shm
+*.db-wal
+
+# 日志文件
+logs/*.log
+
+# 二进制文件
+main
+*.exe
+
+# IDE 文件
+.idea/
+.vscode/
+*.swp
